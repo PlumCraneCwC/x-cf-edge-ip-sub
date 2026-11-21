@@ -11,6 +11,7 @@ on:
       - ".github/workflows/publish.yml"
       - "scripts/**"
       - "targets.txt"
+      - "preferred-ip.txt"
       - "tests/**"
       - "site/**"
 

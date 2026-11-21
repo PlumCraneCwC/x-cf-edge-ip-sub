@@ -32,6 +32,11 @@ MAX_CANDIDATES = 12
 CONNECT_TIMEOUT = 4.0
 IO_TIMEOUT = 5.0
 DEFAULT_TARGETS = Path(__file__).resolve().parents[1] / "targets.txt"
+# Optional operator-provided IP that this workflow should prefer for every
+# affected host, as long as it still passes the probes from the runner. The
+# client-side helper (scripts/client_verify.py) rewrites this file after
+# measuring which Cloudflare anycast addresses are reachable from the LAN.
+PREFERRED_IP_FILE = Path(__file__).resolve().parents[1] / "preferred-ip.txt"
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,28 @@ def resolve_ipv4(hostname: str = CANDIDATE_DOMAIN) -> list[str]:
         if parsed.version == 4 and parsed.is_global:
             candidates.add(str(parsed))
     return sorted(candidates)[:MAX_CANDIDATES]
+
+
+def read_preferred_ips(path: Path) -> list[str]:
+    """Return operator-preferred IPv4 candidates, in file order, if any exist.
+
+    Each non-comment line is one address; the first address that passes the
+    probes for a host wins, so the list doubles as a fallback chain.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+    result: list[str] = []
+    for line in lines:
+        raw = line.split("#", 1)[0].strip()
+        if not raw:
+            continue
+        parsed = ipaddress.ip_address(raw)
+        if parsed.version != 4 or not parsed.is_global:
+            raise ValueError(f"{path} does not contain a public IPv4 address: {raw!r}")
+        result.append(str(parsed))
+    return result
 
 
 def _read_headers(sock: ssl.SSLSocket, limit: int = 16_384) -> bytes:
@@ -252,13 +279,31 @@ def main() -> int:
     args = parser.parse_args()
 
     targets = read_targets(args.targets)
-    candidates = resolve_ipv4()
+    try:
+        candidates = resolve_ipv4()
+    except OSError as exc:
+        print(f"warning: could not resolve {CANDIDATE_DOMAIN}: {exc}", file=sys.stderr)
+        candidates = []
+    preferred_ips = read_preferred_ips(PREFERRED_IP_FILE)
+    if preferred_ips:
+        print(f"Operator-preferred candidate IPs: {', '.join(preferred_ips)}", file=sys.stderr)
     print(f"Explicit affected hosts: {', '.join(targets)}", file=sys.stderr)
     print(f"Resolved {CANDIDATE_DOMAIN} IPv4 candidates: {', '.join(candidates)}", file=sys.stderr)
 
     selected: dict[str, str] = {}
     for host in targets:
-        print(f"Testing candidate IPs with SNI/Host {host}", file=sys.stderr)
+        placed = False
+        for preferred in preferred_ips:
+            probes = [probe_ipv4(preferred, hostname=host) for _ in range(ATTEMPTS)]
+            if sum(1 for probe in probes if probe.ok) >= MIN_SUCCESSES:
+                selected[host] = preferred
+                print(f"Selected {host} -> {preferred} (preferred)", file=sys.stderr)
+                placed = True
+                break
+            print(f"Preferred {preferred} did not pass for {host}", file=sys.stderr)
+        if placed:
+            continue
+        print(f"Testing jsdelivr candidate IPs with SNI/Host {host}", file=sys.stderr)
         ip, _ = choose_candidate(
             candidates,
             probe_fn=lambda candidate, target=host: probe_ipv4(candidate, hostname=target),
