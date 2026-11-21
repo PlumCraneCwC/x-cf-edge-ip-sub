@@ -1,5 +1,8 @@
 # x.com apex plus every subdomain (covers new subdomains automatically).
 ||x.com^
+# AGH rewrite rules with ||x.com^ do not seem to cover subdomains in the
+# installed AGH version, so pin api.x.com explicitly for its AAAA answers.
+api.x.com
 # X media CDN lives on Fastly, not Cloudflare. The real A record set includes
 # 146.75.44.159, which this line cannot complete a handshake with, so each host
 # is pinned to a verified edge in static-ips.txt.

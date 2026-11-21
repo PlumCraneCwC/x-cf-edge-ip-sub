@@ -4,3 +4,6 @@ x.com 104.21.8.91
 pbs.twimg.com 140.248.144.159
 abs.twimg.com 140.248.144.159
 video.twimg.com 140.248.144.159
+# api.x.com has AAAA records that reach a dead IPv6 path on the mobile
+# network; pin its A answer so the explicit AAAA NXDOMAIN rule also loads.
+api.x.com 104.21.8.91
