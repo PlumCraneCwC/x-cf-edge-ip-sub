@@ -1,0 +1,8 @@
+# Exact hostnames confirmed to fail TLS from the client network go here.
+# Keep only affected hosts; do not use wildcards or parent domains.
+# One hostname per line. Confirmed on 2026-11-22 from the client LAN and
+# separately verified to complete a TLS/Host probe against the jsdelivr.com
+# candidate addresses (hosts that failed that probe were left out on purpose):
+x.com
+twitter.com
+www.twitter.com
