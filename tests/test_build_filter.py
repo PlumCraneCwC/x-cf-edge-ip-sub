@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,17 @@ class BuildFilterTests(unittest.TestCase):
         self.assertIn("|x.com|$dnstype=A,dnsrewrite=NOERROR;A;104.21.8.91", rendered)
         self.assertNotIn("||x.com^", rendered)
         self.assertNotIn("dnstype=AAAA", rendered)
+
+    def test_wildcard_target_is_parsed_and_rendered(self):
+        self.assertEqual(build_filter.split_target("||x.com^"), ("wildcard", "x.com"))
+        rendered = build_filter.render_rules({"||x.com^": "104.21.8.91"})
+        self.assertIn("||x.com^$dnstype=A,dnsrewrite=NOERROR;A;104.21.8.91", rendered)
+
+    def test_read_targets_accepts_wildcard_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "targets.txt"
+            path.write_text("# apex + all subdomains\n||x.com^\n", encoding="utf-8")
+            self.assertEqual(build_filter.read_targets(path), ["||x.com^"])
 
     def test_render_rules_only_contains_explicit_hosts(self):
         rendered = build_filter.render_rules({

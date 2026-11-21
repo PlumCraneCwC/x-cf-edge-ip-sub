@@ -75,6 +75,21 @@ def normalize_hostname(hostname: str) -> str:
     return value
 
 
+WILDCARD_TARGET_RE = re.compile(r"^\|\|([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)\^$")
+
+
+def split_target(target: str) -> tuple[str, str]:
+    """Return (kind, hostname); kind is 'exact' or 'wildcard'.
+
+    A wildcard target is written as ``||x.com^`` and covers the apex domain plus
+    every subdomain, which is what AdGuard Home's ``||domain^`` syntax matches.
+    """
+    match = WILDCARD_TARGET_RE.fullmatch(target)
+    if match:
+        return "wildcard", normalize_hostname(match.group(1))
+    return "exact", normalize_hostname(target)
+
+
 def read_targets(path: Path) -> list[str]:
     """Read an explicit exact-host allowlist, ignoring blank/comment lines."""
     targets: list[str] = []
@@ -84,12 +99,13 @@ def read_targets(path: Path) -> list[str]:
         if not value:
             continue
         try:
-            host = normalize_hostname(value)
+            kind, host = split_target(value)
         except ValueError as exc:
             raise ValueError(f"{path}:{line_no}: {exc}") from exc
-        if host not in seen:
-            targets.append(host)
-            seen.add(host)
+        key = f"||{host}^" if kind == "wildcard" else host
+        if key not in seen:
+            targets.append(key)
+            seen.add(key)
     if not targets:
         raise RuntimeError(f"no exact hostnames configured in {path}")
     return targets
@@ -272,15 +288,18 @@ def render_rules(
     stamp = (generated_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     lines = [
         "! Title: Confirmed affected X-related hosts (automatically TLS/HTTP verified)",
-        "! Description: Explicit exact-host list only; A queries only; no wildcard or AAAA rewrite.",
+        "! Description: A queries only; no AAAA rewrite. Rules follow targets.txt.",
         f"! Generated: {stamp.isoformat(timespec='seconds')}",
     ]
     for raw_host, ip in addresses.items():
-        host = normalize_hostname(raw_host)
+        kind, host = split_target(raw_host)
         parsed = ipaddress.ip_address(ip)
         if parsed.version != 4 or not parsed.is_global:
             raise ValueError(f"only public IPv4 addresses can be published: {ip}")
-        lines.append(f"|{host}|$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
+        if kind == "wildcard":
+            lines.append(f"||{host}^$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
+        else:
+            lines.append(f"|{host}|$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
     return "\n".join(lines) + "\n"
 
 
@@ -330,7 +349,8 @@ def main() -> int:
     print(f"Resolved {CANDIDATE_DOMAIN} IPv4 candidates: {', '.join(candidates)}", file=sys.stderr)
 
     selected: dict[str, str] = {}
-    for host in targets:
+    for target in targets:
+        kind, host = split_target(target)
         placed = False
         if host in static_ips:
             pinned = static_ips[host]
@@ -343,13 +363,13 @@ def main() -> int:
                     f"static pin {pinned} for {host} failed the probe from this runner; "
                     "refusing to publish an unverified rule"
                 )
-            selected[host] = pinned
+            selected[target] = pinned
             print(f"Selected {host} -> {pinned} (static pin)", file=sys.stderr)
             continue
         for preferred in preferred_ips:
             probes = [probe_ipv4(preferred, hostname=host) for _ in range(ATTEMPTS)]
             if sum(1 for probe in probes if probe.ok) >= MIN_SUCCESSES:
-                selected[host] = preferred
+                selected[target] = preferred
                 print(f"Selected {host} -> {preferred} (preferred)", file=sys.stderr)
                 placed = True
                 break
@@ -361,7 +381,7 @@ def main() -> int:
             candidates,
             probe_fn=lambda candidate, target=host: probe_ipv4(candidate, hostname=target),
         )
-        selected[host] = ip
+        selected[target] = ip
         print(f"Selected {host} -> {ip}", file=sys.stderr)
 
     atomic_write(args.output, render_rules(selected))
