@@ -37,6 +37,12 @@ DEFAULT_TARGETS = Path(__file__).resolve().parents[1] / "targets.txt"
 # client-side helper (scripts/client_verify.py) rewrites this file after
 # measuring which Cloudflare anycast addresses are reachable from the LAN.
 PREFERRED_IP_FILE = Path(__file__).resolve().parents[1] / "preferred-ip.txt"
+# Optional per-host pins for hosts that do NOT sit on a Cloudflare edge (for
+# example pbs.twimg.com, which is Fastly). One "hostname ip" pair per line.
+# A pinned host skips the jsdelivr candidate search entirely and must still
+# pass the probe on the pinned address from the runner, otherwise the build
+# fails closed instead of publishing an unverified rewrite.
+STATIC_IPS_FILE = Path(__file__).resolve().parents[1] / "static-ips.txt"
 
 
 @dataclass(frozen=True)
@@ -123,6 +129,28 @@ def read_preferred_ips(path: Path) -> list[str]:
     return result
 
 
+def read_static_ips(path: Path) -> dict[str, str]:
+    """Return explicit "hostname ip" pins, keyed by normalized hostname."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return {}
+    pins: dict[str, str] = {}
+    for line_no, line in enumerate(lines, 1):
+        raw = line.split("#", 1)[0].strip()
+        if not raw:
+            continue
+        parts = raw.split()
+        if len(parts) != 2:
+            raise ValueError(f"{path}:{line_no}: expected 'hostname ip', got {raw!r}")
+        host = normalize_hostname(parts[0])
+        parsed = ipaddress.ip_address(parts[1])
+        if parsed.version != 4 or not parsed.is_global:
+            raise ValueError(f"{path}:{line_no}: not a public IPv4 address: {parts[1]!r}")
+        pins[host] = str(parsed)
+    return pins
+
+
 def _read_headers(sock: ssl.SSLSocket, limit: int = 16_384) -> bytes:
     data = bytearray()
     while b"\r\n\r\n" not in data and len(data) < limit:
@@ -133,8 +161,14 @@ def _read_headers(sock: ssl.SSLSocket, limit: int = 16_384) -> bytes:
     return bytes(data)
 
 
-def probe_ipv4(ip: str, hostname: str = DOMAIN) -> Probe:
-    """Probe a candidate IP with hostname-preserving TLS/SNI and HTTP/1.1."""
+def probe_ipv4(ip: str, hostname: str = DOMAIN, *, accept_any_http: bool = False) -> Probe:
+    """Probe a candidate IP with hostname-preserving TLS/SNI and HTTP/1.1.
+
+    accept_any_http relaxes the status check to "the server answered with a
+    valid HTTP status line". Needed for static pins where the origin really
+    does answer 4xx on "/" (e.g. pbs.twimg.com returns 400 by design) but the
+    address is still the right edge for that SNI.
+    """
     hostname = normalize_hostname(hostname)
     started = time.monotonic()
     raw: socket.socket | None = None
@@ -170,6 +204,8 @@ def probe_ipv4(ip: str, hostname: str = DOMAIN) -> Probe:
         status = int(fields[1])
         elapsed = time.monotonic() - started
         if 200 <= status < 400:
+            return Probe(True, elapsed=elapsed, status=status)
+        if accept_any_http:
             return Probe(True, elapsed=elapsed, status=status)
         return Probe(False, elapsed=elapsed, status=status,
                      error=f"HTTP status {status} is outside the accepted 2xx/3xx range")
@@ -284,6 +320,9 @@ def main() -> int:
     except OSError as exc:
         print(f"warning: could not resolve {CANDIDATE_DOMAIN}: {exc}", file=sys.stderr)
         candidates = []
+    static_ips = read_static_ips(STATIC_IPS_FILE)
+    if static_ips:
+        print(f"Static host pins: {', '.join(f'{k}->{v}' for k, v in static_ips.items())}", file=sys.stderr)
     preferred_ips = read_preferred_ips(PREFERRED_IP_FILE)
     if preferred_ips:
         print(f"Operator-preferred candidate IPs: {', '.join(preferred_ips)}", file=sys.stderr)
@@ -293,6 +332,20 @@ def main() -> int:
     selected: dict[str, str] = {}
     for host in targets:
         placed = False
+        if host in static_ips:
+            pinned = static_ips[host]
+            probes = []
+            for _ in range(ATTEMPTS):
+                probes.append(probe_ipv4(pinned, hostname=host, accept_any_http=True))
+                time.sleep(0.4)  # Fastly resets bursts of back-to-back handshakes
+            if sum(1 for probe in probes if probe.ok) < MIN_SUCCESSES:
+                raise RuntimeError(
+                    f"static pin {pinned} for {host} failed the probe from this runner; "
+                    "refusing to publish an unverified rule"
+                )
+            selected[host] = pinned
+            print(f"Selected {host} -> {pinned} (static pin)", file=sys.stderr)
+            continue
         for preferred in preferred_ips:
             probes = [probe_ipv4(preferred, hostname=host) for _ in range(ATTEMPTS)]
             if sum(1 for probe in probes if probe.ok) >= MIN_SUCCESSES:

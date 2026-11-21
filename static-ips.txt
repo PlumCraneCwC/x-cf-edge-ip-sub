@@ -1,0 +1,6 @@
+# Explicit "hostname ip" pins for affected hosts that are NOT on a
+# Cloudflare edge and therefore cannot use the jsdelivr borrow trick.
+# Every pin is still re-verified by build_filter.py on each run; if the pin
+# stops answering, the workflow fails closed instead of publishing a
+# rewrite that would black-hole the host on the client.
+pbs.twimg.com 140.248.164.159
