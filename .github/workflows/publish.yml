@@ -12,6 +12,7 @@ on:
       - "scripts/**"
       - "targets.txt"
       - "preferred-ip.txt"
+      - "static-ips.txt"
       - "tests/**"
       - "site/**"
 

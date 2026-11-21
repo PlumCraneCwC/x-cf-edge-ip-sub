@@ -1,0 +1,5 @@
+# Hosts that do not sit on a Cloudflare edge, pinned to a Fastly edge that was
+# verified from the client LAN on 2026-11-22 (pbs/abs: 6/6 handshakes OK).
+pbs.twimg.com 140.248.164.159
+abs.twimg.com 140.248.164.159
+video.twimg.com 140.248.164.158
