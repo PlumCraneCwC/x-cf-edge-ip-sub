@@ -288,7 +288,8 @@ def render_rules(
     stamp = (generated_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     lines = [
         "! Title: Confirmed affected X-related hosts (automatically TLS/HTTP verified)",
-        "! Description: A queries only; no AAAA rewrite. Rules follow targets.txt.",
+        "! Description: A queries rewritten to reachable IPv4 addresses; AAAA queries",
+        "! answered NXDOMAIN so clients stop preferring unreachable IPv6 paths.",
         f"! Generated: {stamp.isoformat(timespec='seconds')}",
     ]
     for raw_host, ip in addresses.items():
@@ -297,9 +298,11 @@ def render_rules(
         if parsed.version != 4 or not parsed.is_global:
             raise ValueError(f"only public IPv4 addresses can be published: {ip}")
         if kind == "wildcard":
-            lines.append(f"||{host}^$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
+            prefix = f"||{host}^"
         else:
-            lines.append(f"|{host}|$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
+            prefix = f"|{host}|"
+        lines.append(f"{prefix}$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
+        lines.append(f"{prefix}$dnstype=AAAA,dnsrewrite=NXDOMAIN")
     return "\n".join(lines) + "\n"
 
 
