@@ -2,8 +2,8 @@ name: Refresh and publish affected X AdGuard rules
 
 on:
   schedule:
-    # Four runs per day, offset from the top of the hour to reduce queue contention.
-    - cron: "23 */6 * * *"
+    # Eight runs per day, offset from the top of the hour to reduce queue contention.
+    - cron: "23 */3 * * *"
   workflow_dispatch:
   push:
     branches: [main]
