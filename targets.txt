@@ -1,32 +1,4 @@
 # Exact hostnames confirmed to fail TLS from the client network go here.
 # Keep only affected hosts; do not use wildcards or parent domains.
-# One hostname per line. Confirmed on 2026-11-22 from the client LAN and
-# separately verified to complete a TLS/Host probe against the jsdelivr.com
-# candidate addresses (hosts that failed that probe were left out on purpose):
-#
-# Added 2026-11-22 after a sweep of 24 candidate hosts (A record in a
-# Cloudflare anycast range AND real-IP TLS handshake failing AND jsdelivr
-# probe passing). Left out on purpose: api.twitter.com, upload.twitter.com,
-# help.twitter.com (blocked but jsdelivr probe 0/2 -> not on a Cloudflare
-# edge that serves these SNIs); all x.com subdomains (www/api/mobile/ads/
-# business/developer/help/support) and www.twitter.com currently complete a
-# real-IP handshake on their own; twimg-com hosts are Fastly/Twitter, not CF.
+# One hostname per line. Confirmed on 2026-11-22 from the client LAN.
 x.com
-twitter.com
-www.twitter.com
-mobile.twitter.com
-developer.twitter.com
-support.twitter.com
-ads.twitter.com
-analytics.twitter.com
-business.twitter.com
-t.co
-tweetdeck.twitter.com
-pro.twitter.com
-studio.twitter.com
-#
-# pbs.twimg.com is Fastly/Twitter (NOT Cloudflare), so the jsdelivr borrow
-# trick cannot serve it; it is pinned to a Fastly edge that still answers
-# from this network (see static-ips.txt). Its A set currently includes
-# 146.75.44.159, which black-holes, so clients hitting that record stall.
-pbs.twimg.com
