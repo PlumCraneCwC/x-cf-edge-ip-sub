@@ -288,8 +288,8 @@ def render_rules(
     stamp = (generated_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     lines = [
         "! Title: Confirmed affected X-related hosts (automatically TLS/HTTP verified)",
-        "! Description: A queries rewritten to reachable IPv4 addresses; AAAA queries",
-        "! answered NXDOMAIN so clients stop preferring unreachable IPv6 paths.",
+        "! Description: A queries rewritten to reachable IPv4 addresses. Rules",
+        "! follow targets.txt; AAAA is left untouched.",
         f"! Generated: {stamp.isoformat(timespec='seconds')}",
     ]
     for raw_host, ip in addresses.items():
@@ -302,7 +302,6 @@ def render_rules(
         else:
             prefix = f"|{host}|"
         lines.append(f"{prefix}$dnstype=A,dnsrewrite=NOERROR;A;{parsed}")
-        lines.append(f"{prefix}$dnstype=AAAA,dnsrewrite=NXDOMAIN")
     return "\n".join(lines) + "\n"
 
 

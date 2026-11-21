@@ -16,7 +16,7 @@ class BuildFilterTests(unittest.TestCase):
         )
         self.assertIn("|x.com|$dnstype=A,dnsrewrite=NOERROR;A;104.21.8.91", rendered)
         self.assertNotIn("||x.com^", rendered)
-        self.assertIn("|x.com|$dnstype=AAAA,dnsrewrite=NXDOMAIN", rendered)
+        self.assertNotIn("dnstype=AAAA", rendered)
 
     def test_wildcard_target_is_parsed_and_rendered(self):
         self.assertEqual(build_filter.split_target("||x.com^"), ("wildcard", "x.com"))
