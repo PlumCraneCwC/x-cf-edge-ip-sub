@@ -14,7 +14,7 @@
    ```
 
    `OK` 的主机不加入规则；`AFFECTED` 表示当前解析到的所有地址连续 3 次都未完成已验证的 TLS 握手；`PARTIAL` 表示部分地址可握手、部分不行，先人工复核，脚本不会自动纳入；`UNKNOWN`（例如 DNS 无答案）不应据此判定为受影响。脚本只进行 DNS/TLS 测试，不会改配置。若 Firefox 使用与系统不同的 DoH/代理路径，请以 Firefox 实际连接记录为准，避免把不同解析路径的结果混为一谈。
-3. 只把经客户端验证为 `AFFECTED` 的**精确主机名**逐行写入 `targets.txt`。当前唯一已确认的是 `x.com`。不要添加通配符或父域名；例如只列 `api.x.com` 就不会匹配 `x.com` 或其他子域名。
+3. 只把经客户端验证为 `AFFECTED` 的**精确主机名**逐行写入 `targets.txt`。不要添加通配符或父域名；例如只列 `api.x.com` 就不会匹配 `x.com` 或其他子域名。
 
 可选地，脚本把 AFFECTED 主机写到单独文件供人工审核：
 
@@ -37,6 +37,16 @@ python3 scripts/diagnose_hosts.py --input observed-hosts.txt --write-affected wo
 `|api.x.com|$dnstype=A,dnsrewrite=NOERROR;A;<已验证的IP>`
 
 候选地址的连通性验证发生在 GitHub runner，而不是客户端，所以它验证的是“该 IP 在 runner 上是否能以该主机名握手并返回 2xx/3xx”，不是客户端路径可用性的保证。此订阅应视为可撤销的实验性规则，部署后仍要从实际客户端验证。
+
+## 非 Cloudflare 主机：`static-ips.txt`
+
+有些受影响主机不在 Cloudflare 边缘上（例如 `pbs.twimg.com` 走 Fastly），`jsdelivr.com` 借 IP 的办法对它们无效。把它们和一条**在该 SNI 上仍能完成 TLS 握手**的地址写进 `static-ips.txt`：
+
+```
+pbs.twimg.com 140.248.164.159
+```
+
+这类主机在构建时跳过候选搜索，直接用固定地址探测（收到任何合法 HTTP 状态行即算通过，因为 Fastly 对 `/` 本来就返回 400）；一旦该地址探测失败，整个工作流会失败并保留上一版，不会发布会黑洞的规则。
 
 ## 发布步骤
 
