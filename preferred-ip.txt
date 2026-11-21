@@ -1,8 +1,0 @@
-# Cloudflare anycast IPv4 addresses that are reachable from the LAN.
-# Written by scripts/client_verify.py (and edited by hand when needed).
-# The publish workflow tries each address in order per host and uses the
-# first one that still passes 2 of 3 real TLS/HTTP probes; if none pass it
-# falls back to the addresses resolved from jsdelivr.com.
-104.17.0.1
-104.18.0.1
-188.114.96.1
