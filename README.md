@@ -23,12 +23,12 @@ https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom.txt
 对 `targets.txt` 里的每个条目，输出两条规则：
 
 ```
-||x.com^$dnstype=A,dnsrewrite=NOERROR;A;172.64.145.202
+||x.com^$dnstype=A,dnsrewrite=NOERROR;A;104.21.8.91
 ||x.com^$dnstype=AAAA,dnsrewrite=NXDOMAIN
 ```
 
 - **A 重写**：把域名指向一条当前可与之完成 TLS 1.3 握手的边缘地址
-- **AAAA 屏蔽**：返回 `NXDOMAIN`，阻止客户端优先走被 RST 的真实 IPv6 路径（X App 的 403 就是这条路径造成的）
+- **AAAA 屏蔽**：返回 `NXDOMAIN`
 
 未列出的域名一律不改写。
 
@@ -56,7 +56,7 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 `static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`。它有两个用途：给部分主机固定一个已验证的边缘地址，以及承载 Fastly 特例（见下节）。
 
 ```
-api.x.com 172.64.145.202
+api.x.com 104.21.8.91
 pbs.twimg.com 140.248.144.159
 ```
 
