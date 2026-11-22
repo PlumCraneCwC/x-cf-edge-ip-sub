@@ -6,3 +6,10 @@
 pbs.twimg.com
 abs.twimg.com
 video.twimg.com
+
+# twitter.com 的真实 A（162.159.140.229 / 172.66.0.227）同样被 SNI 阻断；
+# pin 到与 x.com 相同的可握手边缘。
+twitter.com
+www.twitter.com
+mobile.twitter.com
+
