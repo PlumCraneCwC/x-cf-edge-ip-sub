@@ -48,7 +48,7 @@ jobs:
       - name: Probe candidates and generate the filter
         run: |
           mkdir -p site
-          python scripts/build_filter.py --output site/xcom.txt
+          python scripts/build_filter.py --output site/xcom.txt --trust-static-pins
           test -s site/xcom.txt
           cat site/xcom.txt
 

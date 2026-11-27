@@ -10,6 +10,17 @@ api.x.com
 twitter.com
 www.twitter.com
 mobile.twitter.com
+# 这几个 twitter.com 子域现在仍拿真实 A（162.159.140.229）并被 SNI 阻断，
+# 单独列出让它们也走借用边缘。不用 ||twitter.com^ 通配，因为 platform.twitter.com
+# 在 Fastly 上（当前 403 可用），通配会把它的 A 也改到 CF 边缘从而弄坏。
+api.twitter.com
+upload.twitter.com
+syndication.twitter.com
+help.twitter.com
+analytics.twitter.com
+business.twitter.com
+developer.twitter.com
+investor.twitter.com
 
 # t.co 短链服务同样托管在 Cloudflare，真实 A 172.66.0.227 被 SNI 阻断，
 # pin 到与 x.com 相同的可握手边缘。

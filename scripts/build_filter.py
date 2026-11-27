@@ -30,7 +30,7 @@ ATTEMPTS = 3
 MIN_SUCCESSES = 2
 MAX_CANDIDATES = 12
 CONNECT_TIMEOUT = 4.0
-IO_TIMEOUT = 5.0
+IO_TIMEOUT = 10.0
 DEFAULT_TARGETS = Path(__file__).resolve().parents[1] / "targets.txt"
 # Optional operator-provided IP that this workflow should prefer for every
 # affected host, as long as it still passes the probes from the runner. The
@@ -334,6 +334,9 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path, help="output filter-list path")
     parser.add_argument("--targets", type=Path, default=DEFAULT_TARGETS,
                         help=f"explicit exact-host affected list (default: {DEFAULT_TARGETS})")
+    parser.add_argument("--trust-static-pins", action="store_true",
+                        help="accept static-ips.txt entries without probing them "
+                             "(probe bursts can trip the edge's rate limiting)")
     args = parser.parse_args()
 
     targets = read_targets(args.targets)
@@ -357,6 +360,10 @@ def main() -> int:
         placed = False
         if host in static_ips:
             pinned = static_ips[host]
+            if args.trust_static_pins:
+                selected[target] = pinned
+                print(f"Selected {host} -> {pinned} (static pin, not probed)", file=sys.stderr)
+                continue
             probes = []
             for _ in range(ATTEMPTS):
                 probes.append(probe_ipv4(pinned, hostname=host, accept_any_http=True))
