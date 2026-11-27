@@ -4,15 +4,13 @@
 # AGH 的通配 dnsrewrite 不覆盖子域，api.x.com 单列出来，
 # 这样它的 AAAA 也能返回 NXDOMAIN，避免 App 走被 RST 的 IPv6。
 api.x.com
-# X media CDN lives on Fastly, not Cloudflare. The real A record set includes
-# 146.75.44.159, which this line cannot complete a handshake with, so each host
-# is pinned to a verified edge in static-ips.txt.
-pbs.twimg.com
-abs.twimg.com
-video.twimg.com
 
 # twitter.com 的真实 A（162.159.140.229 / 172.66.0.227）同样被 SNI 阻断；
 # pin 到与 x.com 相同的可握手边缘。
 twitter.com
 www.twitter.com
 mobile.twitter.com
+
+# t.co 短链服务同样托管在 Cloudflare，真实 A 172.66.0.227 被 SNI 阻断，
+# pin 到与 x.com 相同的可握手边缘。
+t.co

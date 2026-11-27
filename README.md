@@ -2,7 +2,7 @@
 
 给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响的域名 A 记录钉到一条**能完成 TLS 握手**的 Cloudflare 边缘地址上，同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。规则由 GitHub Actions 每 3 小时复验一次后发布到 GitHub Pages。
 
-项目主体是**借 Cloudflare 边缘 IP**。少数不在 Cloudflare 上的主机（X 的 Fastly 媒体域名）属于特例，单独写在 [Fastly 特例](#fastly-特例) 一节。
+X 的这些主机（含 `t.co` 短链）都托管在 Cloudflare 上，所以都能借 Cloudflare 边缘 IP 完成握手。
 
 > **前提：本订阅只解决 DNS 层。**
 > 它不提供 TLS 分片、伪装或抗干扰能力。如果你的线路对该主机的 SNI 做了阻断，客户端必须**自备支持 TLS 分片、异步干扰等功能的工具**（technique、zapret 等），否则仍然连不上。
@@ -53,28 +53,16 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 
 ## `static-ips.txt`
 
-`static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`。它有两个用途：给部分主机固定一个已验证的边缘地址，以及承载 Fastly 特例（见下节）。
+`static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`，给这些主机固定一个已验证的边缘地址。
 
 ```
 api.x.com 104.21.8.91
-pbs.twimg.com 140.248.144.159
+t.co 104.21.8.91
 ```
 
-写入该文件的条目跳过候选搜索，直接探测固定地址（收到任何合法 HTTP 状态行即算通过；Fastly 对 `/` 本来就返回 400）。探测失败则整轮失败，不会发布指向黑洞的规则。
+写入该文件的条目跳过候选搜索，直接探测固定地址（收到任何合法 HTTP 状态行即算通过；边缘对 `/` 返回 400/403 属正常）。探测失败则整轮失败，不会发布指向黑洞的规则。
 
 `static-ips.txt` 由路由器上的 cron 脚本每 6 小时重新生成并提交，手工修改会被下一轮覆盖。
-
-## Fastly 特例
-
-X 的媒体域名（`pbs.twimg.com`、`abs.twimg.com`、`video.twimg.com`）**不在 Cloudflare 上**，而在 Fastly 上。借 `jsdelivr.com` 的 Cloudflare IP 对它们无效——Cloudflare 边缘会对未托管的 SNI 直接返回 400，只能完成握手、拿不到内容。
-
-对这些主机：
-
-- 真实 A 记录里含 `146.75.44.x` 这类**TLS 黑洞**地址，客户端抽到就卡住
-- 必须钉到一条在其 SNI 上能正常完成握手的 Fastly 边缘（例如 `140.248.144.159`）
-- 边缘地址会变化，所以由路由器 cron 脚本定期扫描一组候选取最快可用的，写入 `static-ips.txt`
-
-这部分不是本项目的核心手法，只是为了让 X 的图片能加载而做的补丁。
 
 ## 发布
 
