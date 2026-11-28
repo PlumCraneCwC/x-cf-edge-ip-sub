@@ -12,7 +12,7 @@
 `xcom.txt` 覆盖 `x.com` 及其子域、`twitter.com` 与它的 `www`、`mobile` 和业务子域（`api`、`upload`、`syndication`、`help`、`analytics`、`business`、`developer`、`investor`）、`t.co` 短链。
 
 > **前提：本订阅只解决 DNS 层。**
-> 它不提供 TLS 分片、伪装或抗干扰能力。如果你的线路对该主机的 SNI 做了阻断，客户端必须**自备支持 TLS 分片、异步干扰等功能的工具**（technique、zapret 等），否则仍然连不上。
+> 它不提供 TLS 分片、伪装或抗干扰能力。如果你的线路对该主机的 SNI 做了阻断，客户端必须**自备具备这些能力的工具**，否则仍然连不上。
 
 ## 订阅地址
 
