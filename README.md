@@ -50,7 +50,7 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 每个主机按优先级取地址：
 
 1. `static-ips.txt` 里为该主机显式写的固定地址
-2. 客户端侧优选域名解析出的 Cloudflare 边缘（路由器 cron 刷新）
+2. 客户端侧优选域名解析出的 Cloudflare 边缘（由定期任务刷新）
 3. GitHub runner 上 `jsdelivr.com` 的 A 记录
 
 选定后仍会在 runner 上复验：直连 TCP/443、验证 TLS 1.3 证书与 SNI、发送同名 `Host` 的 HTTP/1.1 请求；每地址测 3 次、至少 2 次通过才算数。全部候选失败则工作流失败、保留上一版，不会发布未经验证的规则。
@@ -68,7 +68,7 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 
 所以拆成两段：
 
-1. 路由器上的 `/root/xcom-media-probe.sh` 每 30 分钟从国内实测一遍，把真正能握手的地址写进 `media-ips.txt` 并提交（每行 `主机名 地址`）。
+1. 国内侧的探测任务每 30 分钟实测一遍，把真正能握手的地址写进 `media-ips.txt` 并提交（每行 `主机名 地址`）。
 2. `media.yml` 用 `--ips media-ips.txt` 读这份清单：**上报的地址优先生效**，只有上报的主机全失败时才退回 runner 自己的猜测（解析地址 + 已知边缘 + Fastly 段取样）。
 
 两边都用 `curl` 或 TLS 1.3 握手探测，任何合法 HTTP 状态行都算通过——Fastly 对 `/` 返回 400 是正常的。
@@ -85,8 +85,6 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 
 `x.com` 通就够——同一个 zone 在 Cloudflare 边缘上共用证书，实测最快的那个入口对 `api.x.com`、`t.co`、`api.twitter.com` 同样返回正常状态码，所以不必逐个主机复测。
 
-脚本在路由器上：`/root/xcom-cf-optimize.sh`，80 个候选约 20 秒跑完。
-
 ## `static-ips.txt`
 
 `static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`，给这些主机固定一个已验证的边缘地址。
@@ -98,7 +96,7 @@ t.co 104.18.42.54
 
 写入该文件的条目跳过候选搜索，直接探测固定地址（收到任何合法 HTTP 状态行即算通过；边缘对 `/` 返回 400/403 属正常）。探测失败则整轮失败，不会发布指向黑洞的规则。
 
-`static-ips.txt` 由路由器上的 cron 脚本每 6 小时重新生成并提交，手工修改会被下一轮覆盖。
+`static-ips.txt` 由定期任务重新生成并提交，手工修改会被下一轮覆盖。
 
 ## 发布
 
@@ -126,9 +124,9 @@ python3 scripts/build_filter.py --output /tmp/xcom.txt --trust-static-pins
 
 ```
 targets.txt          要处理的 Cloudflare 域名（通配或精确主机）
-static-ips.txt       固定地址（由路由器 cron 刷新）
+static-ips.txt       固定地址（由定期任务刷新）
 media-hosts.txt      Fastly 媒体主机清单
-media-ips.txt        国内实测可用的 Fastly 地址（路由器提交）
+media-ips.txt        国内实测可用的 Fastly 地址（由国内侧任务提交）
 scripts/build_filter.py    探测候选地址并生成 xcom.txt
 scripts/probe_media.py     探测 Fastly 边缘并生成 xcom-media.txt
 scripts/diagnose_hosts.py  客户端侧诊断：哪些主机当前握手失败
