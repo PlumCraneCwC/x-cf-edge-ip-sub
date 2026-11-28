@@ -1,5 +1,5 @@
 # x.com apex plus every subdomain (covers new subdomains automatically).
-# 本文件由 PlumeCrane 维护；仓库 x-cf-edge-ip-sub。
+# 本文件由 PlumeCrane 维护；仓库 x-anycast-sub。
 ||x.com^
 # AGH 的通配 dnsrewrite 不覆盖子域，api.x.com 单列出来，
 # 这样它的 AAAA 也能返回 NXDOMAIN，避免 App 走被 RST 的 IPv6。

@@ -1,6 +1,6 @@
-# x-cf-edge-ip-sub
+# x-anycast-sub
 
-给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响的域名 A 记录钉到一条**能完成 TLS 握手**的 Cloudflare 边缘地址上，同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。规则由 GitHub Actions 每 3 小时复验一次后发布到 GitHub Pages。
+给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响的域名 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上，同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。Cloudflare 主机借 CF 边缘，Fastly 媒体主机单独优选——两者都是 anycast，所以名字不再限定在 Cloudflare。规则由 GitHub Actions 定时复验后发布到 GitHub Pages。
 
 订阅里的主机都托管在 Cloudflare 上，所以都能借 Cloudflare 边缘 IP 完成握手：`x.com` 及子域、`twitter.com` 与其业务子域（`api`、`upload`、`syndication`、`help`、`analytics`、`business`、`developer`、`investor`）、`t.co` 短链。
 
@@ -10,8 +10,8 @@
 ## 订阅地址
 
 ```
-https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom.txt         Cloudflare 主机
-https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom-media.txt   Fastly 媒体主机
+https://PlumCraneCwC.github.io/x-anycast-sub/xcom.txt         Cloudflare 主机
+https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主机
 ```
 
 在 AdGuard Home 的「过滤器 → DNS 阻止列表」里添加即可，两条都加。注意两个设置：
