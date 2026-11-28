@@ -1,6 +1,6 @@
 # x-anycast-sub
 
-给 **X 在用的域名**做的 AdGuard Home 订阅：把受影响域名的 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上（借一条能走通的路径），同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。
+给 **X 及其所属域名**做的 AdGuard Home 订阅：把受影响域名的 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上（借一条能走通的路径），同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。
 
 项目分两份订阅，对应两类主机：
 
