@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - "media-hosts.txt"
+      - "media-ips.txt"
       - "scripts/probe_media.py"
       - ".github/workflows/media.yml"
 
@@ -36,7 +37,12 @@ jobs:
       - name: Probe the media hosts and render the filter
         run: |
           mkdir -p site
-          python scripts/probe_media.py --output site/xcom-media.txt
+          if [ -f media-ips.txt ]; then
+            echo "using the addresses reported from China"
+            python scripts/probe_media.py --ips media-ips.txt --output site/xcom-media.txt
+          else
+            python scripts/probe_media.py --output site/xcom-media.txt
+          fi
           test -s site/xcom-media.txt
           cat site/xcom-media.txt
 
