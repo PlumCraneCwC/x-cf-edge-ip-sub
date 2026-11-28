@@ -93,7 +93,7 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt
 
 ## Cloudflare 入口怎么选
 
-参考 [badafans/better-cloudflare-ip](https://github.com/badafans/better-cloudflare-ip) 的思路：不盯着几个手挑的入口，而是把 Cloudflare 公布的 IPv4 段整体抽样。
+不盯着几个手挑的入口，而是把 Cloudflare 公布的 IPv4 段整体抽样。
 
 1. 每天拉一次 `https://www.cloudflare.com/ips-v4`；每段随机取 5 个 /24、再随机化最后一段，约 75 个候选，另补几个历史可用入口。
 2. 16 路并发，对每个候选发一次 `x.com` 的 TLS 握手加 HTTP 请求，4 秒超时，任何 2xx/3xx/4xx 都算通过。
