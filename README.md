@@ -1,8 +1,15 @@
 # x-anycast-sub
 
-给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响的域名 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上，同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。Cloudflare 主机借 CF 边缘，Fastly 媒体主机单独优选——两者都是 anycast，所以名字不再限定在 Cloudflare。规则由 GitHub Actions 定时复验后发布到 GitHub Pages。
+给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响的域名 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上，同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。
 
-订阅里的主机都托管在 Cloudflare 上，所以都能借 Cloudflare 边缘 IP 完成握手：`x.com` 及子域、`twitter.com` 与其业务子域（`api`、`upload`、`syndication`、`help`、`analytics`、`business`、`developer`、`investor`）、`t.co` 短链。
+项目分两份订阅，对应两类主机：
+
+- **`xcom.txt`** —— 托管在 Cloudflare 的主机，借 Cloudflare 边缘 IP 完成握手。
+- **`xcom-media.txt`** —— 托管在 Fastly 的图片与媒体域名，Fastly 的地址同样按可达性单独优选。
+
+两边的思路一致：都是 anycast 边缘，都是「换一条能握手的路径」。区别只在地址从哪来，所以名字取 anycast，不限定在 Cloudflare。规则由 GitHub Actions 定时复验后发布到 GitHub Pages。
+
+`xcom.txt` 覆盖 `x.com` 及子域、`twitter.com` 与其业务子域（`api`、`upload`、`syndication`、`help`、`analytics`、`business`、`developer`、`investor`）、`t.co` 短链。
 
 > **前提：本订阅只解决 DNS 层。**
 > 它不提供 TLS 分片、伪装或抗干扰能力。如果你的线路对该主机的 SNI 做了阻断，客户端必须**自备支持 TLS 分片、异步干扰等功能的工具**（technique、zapret 等），否则仍然连不上。
