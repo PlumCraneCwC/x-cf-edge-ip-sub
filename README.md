@@ -10,10 +10,11 @@
 ## 订阅地址
 
 ```
-https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom.txt
+https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom.txt         Cloudflare 主机
+https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom-media.txt   Fastly 媒体主机
 ```
 
-在 AdGuard Home 的「过滤器 → DNS 阻止列表」里添加即可。注意两个设置：
+在 AdGuard Home 的「过滤器 → DNS 阻止列表」里添加即可，两条都加。注意两个设置：
 
 - **更新间隔**建议改成 1 小时（默认可能是 24 小时，规则会滞后）
 - 本订阅只改 A/AAAA，不含 block 动作，不会拦截任何流量
@@ -23,12 +24,13 @@ https://PlumCraneCwC.github.io/x-cf-edge-ip-sub/xcom.txt
 对 `targets.txt` 里的每个条目，输出两条规则：
 
 ```
-||x.com^$dnstype=A,dnsrewrite=NOERROR;A;104.16.92.44
+||x.com^$dnstype=A,dnsrewrite=NOERROR;A;104.18.42.54
 ||x.com^$dnstype=AAAA,dnsrewrite=NXDOMAIN
 ```
 
 - **A 重写**：把域名指向一条当前可与之完成 TLS 1.3 握手的边缘地址
 - **AAAA 屏蔽**：返回 `NXDOMAIN`
+
 
 未列出的域名一律不改写。
 
@@ -55,13 +57,24 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 
 自动化发布用 `--trust-static-pins` 直接采用 `static-ips.txt` 里的地址、跳过这轮复验：同一地址在几秒内连打几十次握手会触发边缘限速，本地实测反而会把一条本来可用的地址测死。
 
+## Fastly 媒体主机
+
+`xcom-media.txt` 处理另外一类主机：`pbs`、`abs`、`video`、`ton`、`cdn.syndication.twimg.com`。
+它们 CNAME 到 `*.twitter.map.fastly.net`，不在 Cloudflare 上，借 CF 边缘没有用——Fastly 的真实地址集合里混着 `146.75.44.159` 这类握手永远完不成的黑洞。
+
+所以用 `scripts/probe_media.py` 走另一套逻辑：在 Fastly 的公开段里取样，加上这些域名当前解析出的地址，逐个做 TLS 1.3 握手，留下能握手的、取最快的一条写进 `xcom-media.txt`。
+
+工作流 `.github/workflows/media.yml` 每 30 分钟跑一次（Fastly 边缘失效比 Cloudflare 频繁），有变化就提交并重新发布 Pages。它跑在 GitHub 的境外 runner 上，只能筛掉「边缘本身死了、证书不匹配」这类问题；国内线路自己的 SNI 阻断它看不出来。需要按国内真实可用性优选时，用 `--ips` 喂一份国内上报的地址清单（每行 `主机名 地址`），脚本会优先测这些地址。
+
+明确**不**处理的主机：`abs-0.twimg.com`、`pbs-0.twimg.com`、`r/ma/g.twimg.com`、`twttr.com`、`tweetdeck.com`。它们在 Twitter 自有的 AS13414 里，整个自治域被封，改 DNS 没有意义。
+
 ## `static-ips.txt`
 
 `static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`，给这些主机固定一个已验证的边缘地址。
 
 ```
-api.x.com 104.16.92.44
-t.co 104.16.92.44
+api.x.com 104.18.42.54
+t.co 104.18.42.54
 ```
 
 写入该文件的条目跳过候选搜索，直接探测固定地址（收到任何合法 HTTP 状态行即算通过；边缘对 `/` 返回 400/403 属正常）。探测失败则整轮失败，不会发布指向黑洞的规则。
@@ -75,7 +88,7 @@ t.co 104.16.92.44
 3. Actions → `Refresh and publish affected X AdGuard rules` → Run workflow
 4. 首次部署完成后订阅地址为 `https://<OWNER>.github.io/<REPO>/xcom.txt`
 
-工作流每 3 小时自动跑一次（UTC `23` 分；GitHub 高负载时可能延迟），`targets.txt` / `static-ips.txt` / `scripts/` 变更也会触发。
+`xcom.txt` 的工作流每 3 小时自动跑一次（UTC `23` 分；GitHub 高负载时可能延迟），`targets.txt` / `static-ips.txt` / `scripts/` / `site/` 变更也会触发。`xcom-media.txt` 由另一个每 30 分钟的工作流刷新。
 
 ## 回滚
 
@@ -93,9 +106,11 @@ python3 scripts/build_filter.py --output /tmp/xcom.txt --trust-static-pins
 ## 目录
 
 ```
-targets.txt          要处理的域名（通配或精确主机）
+targets.txt          要处理的 Cloudflare 域名（通配或精确主机）
 static-ips.txt       固定地址（由路由器 cron 刷新）
-scripts/build_filter.py    探测候选地址并生成订阅
+media-hosts.txt      Fastly 媒体主机清单
+scripts/build_filter.py    探测候选地址并生成 xcom.txt
+scripts/probe_media.py     探测 Fastly 边缘并生成 xcom-media.txt
 scripts/diagnose_hosts.py  客户端侧诊断：哪些主机当前握手失败
 preferred-ip.txt     可选的优先地址列表
 ```
