@@ -162,10 +162,10 @@ def pick(host: str, candidates: list[str]) -> tuple[str, float] | None:
 
 
 def probe_host(
-    host: str, primary: list[str], fallback: list[str]
+    host: str, pinned: list[str], fallback: list[str]
 ) -> tuple[str, str, float] | None:
-    """Try the addresses this host actually resolves to before sweeping prefixes."""
-    best = pick(host, primary)
+    """An address reported from China wins; the rest is a best-effort guess."""
+    best = pick(host, pinned) if pinned else None
     if best is None:
         best = pick(host, fallback)
     if best is None:
@@ -217,7 +217,10 @@ def main() -> int:
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         futures = {
             pool.submit(
-                probe_host, host, pinned[host] + dns[host] + list(KNOWN_GOOD), shared
+                probe_host,
+                host,
+                pinned[host],
+                dns[host] + list(KNOWN_GOOD) + shared,
             ): host for host in hosts
         }
         for future in concurrent.futures.as_completed(futures):
