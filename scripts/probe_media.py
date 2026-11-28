@@ -52,23 +52,6 @@ FASTLY_CIDRS = (
     "199.232.0.0/16",
 )
 
-# Addresses the X media CNAMEs have actually answered with.  The sampled
-# prefixes below are too coarse to hit them (``140.248.128.0/17`` is sampled
-# every 8192 addresses), so keep the observed ones as first-class candidates.
-KNOWN_GOOD = (
-    "140.248.128.158",
-    "140.248.128.159",
-    "140.248.132.159",
-    "140.248.144.159",
-    "140.248.160.159",
-    "140.248.164.158",
-    "140.248.164.159",
-    "146.75.44.157",
-    "146.75.112.159",
-    "151.101.0.159",
-    "199.232.148.159",
-    "199.232.160.159",
-)
 
 SAMPLES_PER_NETWORK = 4
 ATTEMPTS = 1
@@ -245,7 +228,7 @@ def main() -> int:
                 probe_host,
                 host,
                 pinned[host],
-                dns[host] + list(KNOWN_GOOD) + shared,
+                dns[host] + shared,
             ): host for host in hosts
         }
         for future in concurrent.futures.as_completed(futures):
