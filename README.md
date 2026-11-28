@@ -1,6 +1,6 @@
 # x-anycast-sub
 
-给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响域名的 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上，同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。
+给 **x.com 及其子域**做的 AdGuard Home 订阅：把受影响域名的 A 记录钉到一条**能完成 TLS 握手**的 anycast 边缘地址上（借一条能走通的路径），同时让它们的 AAAA 返回 `NXDOMAIN`，逼客户端走 IPv4。
 
 项目分两份订阅，对应两类主机：
 
@@ -17,11 +17,11 @@
 ## 订阅地址
 
 ```
-https://PlumCraneCwC.github.io/x-anycast-sub/xcom.txt         Cloudflare 主机
-https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主机
+https://PlumCraneCwC.github.io/x-anycast-sub/xcom.txt
+https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt
 ```
 
-在 AdGuard Home 的「过滤器 → DNS 阻止列表」里添加即可，两条都加。注意两个设置：
+第一条是 Cloudflare 主机，第二条是 Fastly 媒体主机，**两条都要加**。全部加在 AdGuard Home 的「过滤器 → DNS 阻止列表」里。另外注意两个设置：
 
 - **更新间隔**建议改成 1 小时（默认 24 小时，规则会滞后）
 - 本订阅只改写解析结果（A 指向借来的边缘、AAAA 返回 `NXDOMAIN`），不含 block 动作，不会拦截 HTTP 流量
@@ -38,7 +38,17 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主�
 - **A 重写**：把域名指向一条当前可与之完成 TLS 1.3 握手的边缘地址
 - **AAAA 屏蔽**：返回 `NXDOMAIN`
 
-未列出的域名一律不改写。
+**未列出的域名一律不改写。**
+
+## 用了之后会怎样
+
+前提是客户端已经具备 TLS 分片能力（见开头）。满足这一点时：
+
+- X 的网页和 App 能正常打开，不再卡在 `403` 或 reload 页
+- 时间线里的图片、视频从 `xcom-media.txt` 那条路径加载
+- **其它域名不受影响**：规则按域名精确匹配，既不按 IP 段拦，也不含任何 block 动作
+
+不满足前提时，DNS 这一层已经做对了，但 SNI 仍会在线路侧被切断——这时候问题不在订阅。
 
 ## 条目与通配
 
@@ -56,7 +66,7 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主�
 每个主机按优先级取地址：
 
 1. `static-ips.txt` 里为该主机显式写的固定地址
-2. 客户端侧优选域名解析出的 Cloudflare 边缘（由定期任务刷新）
+2. 社区维护的客户端优选域名解析出的 Cloudflare 边缘（由定期任务刷新）
 3. GitHub runner 上 `jsdelivr.com` 的 A 记录
 
 选定后仍会在 runner 上复验（不带 `--trust-static-pins` 时）：直连 TCP/443、校验证书与 SNI 是否匹配、发送同名 `Host` 的 HTTP/1.1 请求；每地址测 3 次、至少 2 次通过才算数。全部候选失败则工作流失败、保留上一版，不会发布未经验证的规则。
@@ -70,7 +80,7 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主�
 
 所以用 `scripts/probe_media.py` 走另一套逻辑：在 Fastly 的公开段里取样，加上这些域名当前解析出的地址，逐个做 TLS 1.3 握手，留下能握手的、每个主机取最快的一条写进 `xcom-media.txt`。
 
-工作流 `.github/workflows/media.yml` 每 30 分钟跑一次（Fastly 边缘失效得比 Cloudflare 频繁），有变化就提交并重新发布 Pages。它跑在 GitHub 的境外 runner 上，只能筛掉「边缘本身死了、证书不匹配」这类问题；国内线路自己的 SNI 阻断它看不出来。
+工作流 `.github/workflows/media.yml` 每 30 分钟跑一次（Fastly 边缘失效得比 Cloudflare 频繁），有变化就提交并重新发布 Pages。它跑在 GitHub 的 runner 上，只能筛掉「边缘本身死了、证书不匹配」这类问题；国内线路自己的 SNI 阻断它看不出来。
 
 所以拆成两段：
 
@@ -102,7 +112,7 @@ t.co <边缘地址>
 
 写入该文件的条目跳过候选搜索。CI 发布时带 `--trust-static-pins`，直接采用这里的地址、不再逐条探测（原因见上一节）；本地不带该参数时才会复验，收到任何合法 HTTP 状态行即算通过，边缘对 `/` 返回 400/403 属正常。
 
-`static-ips.txt` 由优选任务重新生成并提交（当前为手动触发），手工修改会被下一次运行覆盖。
+`static-ips.txt` 由优选任务重新生成并提交（当前为手动触发），**手工修改会被下一次运行覆盖**。
 
 ## 发布
 
@@ -111,11 +121,25 @@ t.co <边缘地址>
 3. Actions → `Refresh and publish affected X AdGuard rules` → Run workflow
 4. 首次部署完成后订阅地址为 `https://<OWNER>.github.io/<REPO>/xcom.txt`
 
-`xcom.txt` 的工作流按 cron `23 */3 * * *`（UTC）每 3 小时跑一次，GitHub 高负载时可能延迟，`targets.txt` / `static-ips.txt` / `scripts/` / `site/` 变更也会触发。`xcom-media.txt` 由另一个每 30 分钟的工作流刷新。
+`xcom.txt` 的工作流每 3 小时跑一次（cron `23 */3 * * *`，UTC），GitHub 高负载时可能延迟，`targets.txt` / `static-ips.txt` / `scripts/` / `site/` 变更也会触发。`xcom-media.txt` 由另一个每 30 分钟的工作流刷新。
 
 ## 回滚
 
-在 AdGuard Home 里停用或删除该订阅并刷新缓存即可。想停止自动更新可在 GitHub 停用 workflow；已部署的规则不会自动清除。
+在 AdGuard Home 里停用或删除该订阅并刷新缓存即可。想停止自动更新可在 GitHub 停用 workflow；已部署的规则不会自动清除。想连订阅本身一起撤掉，直接删除这个仓库即可，Pages 会随之失效。
+
+## 常见问题
+
+**为什么 AAAA 返 `NXDOMAIN`，而不是给一个假地址？**
+
+返回一个不存在的 v6 地址，客户端会先去尝试、等超时才回落 IPv4，App 启动就慢一拍；`NXDOMAIN` 让它当场放弃 v6。
+
+**为什么不干脆用代理或 VPN？**
+
+这是给「只想让 X 恢复、不想全流量绕路」的场景准备的，作用范围只到 DNS 这一层。
+
+**订阅加上了，X 还是打不开？**
+
+说明线路上是在 SNI 层阻断，DNS 已经没得改。检查客户端那边是否真的开了分片工具（technique、zapret 等）——没开的话换什么地址都没用。
 
 ## 本地验证
 
@@ -128,12 +152,10 @@ python3 scripts/build_filter.py --output /tmp/xcom.txt --trust-static-pins
 
 ## 目录
 
-```
-targets.txt          要处理的 X 域名（通配或精确主机）
-static-ips.txt       固定地址（由定期任务刷新）
-media-hosts.txt      Fastly 媒体主机清单
-media-ips.txt        国内实测可用的 Fastly 地址（由国内侧任务提交）
-scripts/build_filter.py    探测候选地址并生成 xcom.txt
-scripts/probe_media.py     探测 Fastly 边缘并生成 xcom-media.txt
-scripts/diagnose_hosts.py  客户端侧诊断：哪些主机当前握手失败
-```
+- `targets.txt` —— 要处理的 X 域名（通配或精确主机）
+- `static-ips.txt` —— 固定地址（由定期任务刷新）
+- `media-hosts.txt` —— Fastly 媒体主机清单
+- `media-ips.txt` —— 国内实测可用的 Fastly 地址
+- `scripts/build_filter.py` —— 探测候选地址并生成 `xcom.txt`
+- `scripts/probe_media.py` —— 探测 Fastly 边缘并生成 `xcom-media.txt`
+- `scripts/diagnose_hosts.py` —— 客户端侧诊断：哪些主机当前握手失败
