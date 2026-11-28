@@ -64,7 +64,14 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 
 所以用 `scripts/probe_media.py` 走另一套逻辑：在 Fastly 的公开段里取样，加上这些域名当前解析出的地址，逐个做 TLS 1.3 握手，留下能握手的、取最快的一条写进 `xcom-media.txt`。
 
-工作流 `.github/workflows/media.yml` 每 30 分钟跑一次（Fastly 边缘失效比 Cloudflare 频繁），有变化就提交并重新发布 Pages。它跑在 GitHub 的境外 runner 上，只能筛掉「边缘本身死了、证书不匹配」这类问题；国内线路自己的 SNI 阻断它看不出来。需要按国内真实可用性优选时，用 `--ips` 喂一份国内上报的地址清单（每行 `主机名 地址`），脚本会优先测这些地址。
+工作流 `.github/workflows/media.yml` 每 30 分钟跑一次（Fastly 边缘失效比 Cloudflare 频繁），有变化就提交并重新发布 Pages。它跑在 GitHub 的境外 runner 上，只能筛掉「边缘本身死了、证书不匹配」这类问题；国内线路自己的 SNI 阻断它看不出来。
+
+所以拆成两段：
+
+1. 路由器上的 `/root/xcom-media-probe.sh` 每 30 分钟从国内实测一遍，把真正能握手的地址写进 `media-ips.txt` 并提交（每行 `主机名 地址`）。
+2. `media.yml` 用 `--ips media-ips.txt` 读这份清单：**上报的地址优先生效**，只有上报的主机全失败时才退回 runner 自己的猜测（解析地址 + 已知边缘 + Fastly 段取样）。
+
+两边都用 `curl` 或 TLS 1.3 握手探测，任何合法 HTTP 状态行都算通过——Fastly 对 `/` 返回 400 是正常的。
 
 明确**不**处理的主机：`abs-0.twimg.com`、`pbs-0.twimg.com`、`r/ma/g.twimg.com`、`twttr.com`、`tweetdeck.com`。它们在 Twitter 自有的 AS13414 里，整个自治域被封，改 DNS 没有意义。
 
@@ -109,6 +116,7 @@ python3 scripts/build_filter.py --output /tmp/xcom.txt --trust-static-pins
 targets.txt          要处理的 Cloudflare 域名（通配或精确主机）
 static-ips.txt       固定地址（由路由器 cron 刷新）
 media-hosts.txt      Fastly 媒体主机清单
+media-ips.txt        国内实测可用的 Fastly 地址（路由器提交）
 scripts/build_filter.py    探测候选地址并生成 xcom.txt
 scripts/probe_media.py     探测 Fastly 边缘并生成 xcom-media.txt
 scripts/diagnose_hosts.py  客户端侧诊断：哪些主机当前握手失败
