@@ -1,15 +1,15 @@
 ! Title: X media hosts on Fastly
 ! Description: A rewrites pin the X media hosts to a Fastly edge that
 !   completes a TLS handshake; AAAA is answered NXDOMAIN.
-! Generated: 2026-11-28T17:14:07Z
+! Generated: 2026-11-28T17:18:59Z
 
-|abs.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.0.159
+|abs.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.128.159
 |abs.twimg.com|$dnstype=AAAA,dnsrewrite=NXDOMAIN
-|cdn.syndication.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.64.159
+|cdn.syndication.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.160.159
 |cdn.syndication.twimg.com|$dnstype=AAAA,dnsrewrite=NXDOMAIN
 |pbs.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.160.159
 |pbs.twimg.com|$dnstype=AAAA,dnsrewrite=NXDOMAIN
 |ton.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.0.159
 |ton.twimg.com|$dnstype=AAAA,dnsrewrite=NXDOMAIN
-|video.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.0.159
+|video.twimg.com|$dnstype=A,dnsrewrite=NOERROR;A;151.101.160.159
 |video.twimg.com|$dnstype=AAAA,dnsrewrite=NXDOMAIN
