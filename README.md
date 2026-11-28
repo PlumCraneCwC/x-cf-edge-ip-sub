@@ -31,7 +31,7 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主�
 对 `targets.txt` 里的每个条目，输出两条规则：
 
 ```
-||x.com^$dnstype=A,dnsrewrite=NOERROR;A;188.114.97.118
+||x.com^$dnstype=A,dnsrewrite=NOERROR;A;<边缘地址>
 ||x.com^$dnstype=AAAA,dnsrewrite=NXDOMAIN
 ```
 
@@ -66,7 +66,7 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主�
 ## Fastly 媒体主机
 
 `xcom-media.txt` 处理另外一类主机：`pbs.twimg.com`、`abs.twimg.com`、`video.twimg.com`、`ton.twimg.com`、`cdn.syndication.twimg.com`。
-它们 CNAME 到 `*.map.fastly.net`，不在 Cloudflare 上，借 CF 边缘没有用——Fastly 的真实地址集合里混着 `146.75.44.159` 这类握手永远完不成的黑洞。
+它们 CNAME 到 `*.map.fastly.net`，不在 Cloudflare 上，借 CF 边缘没有用——Fastly 的真实地址集合里混着一批握手永远完不成的地址。
 
 所以用 `scripts/probe_media.py` 走另一套逻辑：在 Fastly 的公开段里取样，加上这些域名当前解析出的地址，逐个做 TLS 1.3 握手，留下能握手的、每个主机取最快的一条写进 `xcom-media.txt`。
 
@@ -89,15 +89,15 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt   Fastly 媒体主�
 2. 16 路并发，对每个候选发一次 `x.com` 的 TLS 握手加 HTTP 请求，4 秒超时，任何 2xx/3xx/4xx 都算通过。
 3. 取最快的一个写进 `static-ips.txt`。
 
-`x.com` 通就够——同一个 zone 在 Cloudflare 边缘上共用证书，实测最快的那个入口对 `api.x.com`、`t.co`、`api.twitter.com` 同样返回正常状态码，所以不必逐个主机复测。
+`x.com` 通就够——同一个 zone 在 Cloudflare 边缘上共用证书，一个入口能完成握手，`api.x.com`、`t.co` 这些同 zone 主机通常也能用，所以不必逐个主机复测。
 
 ## `static-ips.txt`
 
 `static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`，给这些主机固定一个已验证的边缘地址。
 
 ```
-api.x.com 188.114.97.118
-t.co 188.114.97.118
+api.x.com <边缘地址>
+t.co <边缘地址>
 ```
 
 写入该文件的条目跳过候选搜索。CI 发布时带 `--trust-static-pins`，直接采用这里的地址、不再逐条探测（原因见上一节）；本地不带该参数时才会复验，收到任何合法 HTTP 状态行即算通过，边缘对 `/` 返回 400/403 属正常。
