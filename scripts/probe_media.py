@@ -104,6 +104,19 @@ def read_pinned_ips(path: Path, hosts: list[str]) -> dict[str, list[str]]:
     return pinned
 
 
+def fastly_candidates() -> list[str]:
+    """Fastly answers on the address ending in 159 inside each /24."""
+    out: list[str] = []
+    for cidr in FASTLY_CIDRS:
+        network = ipaddress.ip_network(cidr, strict=False)
+        if network.num_addresses < 512:
+            out.append(str(ipaddress.IPv4Address(int(network.network_address) + 159)))
+            continue
+        for subnet in network.subnets(new_prefix=24):
+            out.append(str(ipaddress.IPv4Address(int(subnet.network_address) + 159)))
+    return out
+
+
 def sample_fastly_ips() -> list[str]:
     out: list[str] = []
     for cidr in FASTLY_CIDRS:
@@ -161,13 +174,25 @@ def pick(host: str, candidates: list[str]) -> tuple[str, float] | None:
     return best
 
 
+def find_edge(host: str, candidates: list[str], batch: int = WORKERS) -> tuple[str, float] | None:
+    """Walk the sweep pool in batches and stop at the first batch that answers."""
+    for start in range(0, len(candidates), batch):
+        chunk = candidates[start : start + batch]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(chunk)) as pool:
+            results = list(pool.map(lambda ip: (ip, probe(ip, host)), chunk))
+        alive = [(ip, elapsed) for ip, elapsed in results if elapsed is not None]
+        if alive:
+            return min(alive, key=lambda item: item[1])
+    return None
+
+
 def probe_host(
     host: str, pinned: list[str], fallback: list[str]
 ) -> tuple[str, str, float] | None:
     """An address reported from China wins; the rest is a best-effort guess."""
     best = pick(host, pinned) if pinned else None
     if best is None:
-        best = pick(host, fallback)
+        best = find_edge(host, fallback)
     if best is None:
         return None
     return host, best[0], best[1]
@@ -208,7 +233,7 @@ def main() -> int:
         print("no hosts to probe", file=sys.stderr)
         return 1
 
-    shared = sample_fastly_ips()
+    shared = fastly_candidates() + sample_fastly_ips()
     pinned = read_pinned_ips(args.ips, hosts) if args.ips else {h: [] for h in hosts}
     dns = {host: resolve(host) for host in hosts}
 
