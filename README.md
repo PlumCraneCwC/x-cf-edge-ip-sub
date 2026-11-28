@@ -99,7 +99,7 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt
 2. 16 路并发，对每个候选发一次 `x.com` 的 TLS 握手加 HTTP 请求，4 秒超时，任何 2xx/3xx/4xx 都算通过。
 3. 取最快的一个写进 `static-ips.txt`。
 
-`x.com` 通就够——同一个 zone 在 Cloudflare 边缘上共用证书，一个入口能完成握手，`api.x.com`、`t.co` 这些同 zone 主机通常也能用，所以不必逐个主机复测。
+`x.com` 通就够——这几个域名都走 Cloudflare，证书由它统一下发到全部边缘节点，一个入口能完成握手，`twitter.com`、`t.co` 通常也能用，所以不必逐个主机复测。
 
 ## `static-ips.txt`
 
