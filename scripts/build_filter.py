@@ -2,9 +2,9 @@
 """Build exact-host, IPv4-only AdGuard Home rules for confirmed affected hosts.
 
 The target list is intentionally explicit: GitHub's network cannot determine
-which hosts fail TLS on the user's client network. For each listed host, the
-current public A records of jsdelivr.com are tested with that host as TLS SNI
-and HTTP Host. Only listed hosts can appear in the generated feed.
+which hosts fail TLS on the user's client network. Every listed host must have
+an address pinned in ``static-ips.txt``; nothing is guessed from DNS, so an
+unpinned host fails the build instead of shipping an unverified rule.
 """
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
 DOMAIN = "x.com"  # Legacy test/default; production targets come from targets.txt.
-CANDIDATE_DOMAIN = "jsdelivr.com"
 PORT = 443
 ATTEMPTS = 3
 MIN_SUCCESSES = 2
@@ -32,16 +31,6 @@ MAX_CANDIDATES = 12
 CONNECT_TIMEOUT = 4.0
 IO_TIMEOUT = 10.0
 DEFAULT_TARGETS = Path(__file__).resolve().parents[1] / "targets.txt"
-# Optional operator-provided IP that this workflow should prefer for every
-# affected host, as long as it still passes the probes from the runner. The
-# client-side helper (scripts/client_verify.py) rewrites this file after
-# measuring which Cloudflare anycast addresses are reachable from the LAN.
-PREFERRED_IP_FILE = Path(__file__).resolve().parents[1] / "preferred-ip.txt"
-# Optional per-host pins for hosts that do NOT sit on a Cloudflare edge (for
-# example pbs.twimg.com, which is Fastly). One "hostname ip" pair per line.
-# A pinned host skips the jsdelivr candidate search entirely and must still
-# pass the probe on the pinned address from the runner, otherwise the build
-# fails closed instead of publishing an unverified rewrite.
 STATIC_IPS_FILE = Path(__file__).resolve().parents[1] / "static-ips.txt"
 
 
@@ -109,40 +98,6 @@ def read_targets(path: Path) -> list[str]:
     if not targets:
         raise RuntimeError(f"no exact hostnames configured in {path}")
     return targets
-
-
-def resolve_ipv4(hostname: str = CANDIDATE_DOMAIN) -> list[str]:
-    """Return unique public IPv4 addresses resolved for the candidate host."""
-    answers = socket.getaddrinfo(hostname, PORT, socket.AF_INET, socket.SOCK_STREAM)
-    candidates: set[str] = set()
-    for answer in answers:
-        address = answer[4][0]
-        parsed = ipaddress.ip_address(address)
-        if parsed.version == 4 and parsed.is_global:
-            candidates.add(str(parsed))
-    return sorted(candidates)[:MAX_CANDIDATES]
-
-
-def read_preferred_ips(path: Path) -> list[str]:
-    """Return operator-preferred IPv4 candidates, in file order, if any exist.
-
-    Each non-comment line is one address; the first address that passes the
-    probes for a host wins, so the list doubles as a fallback chain.
-    """
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        return []
-    result: list[str] = []
-    for line in lines:
-        raw = line.split("#", 1)[0].strip()
-        if not raw:
-            continue
-        parsed = ipaddress.ip_address(raw)
-        if parsed.version != 4 or not parsed.is_global:
-            raise ValueError(f"{path} does not contain a public IPv4 address: {raw!r}")
-        result.append(str(parsed))
-    return result
 
 
 def read_static_ips(path: Path) -> dict[str, str]:
@@ -245,7 +200,7 @@ def choose_candidate(
     """Select by success count first, then median successful end-to-end latency."""
     unique = sorted({str(ipaddress.ip_address(ip)) for ip in candidates})[:MAX_CANDIDATES]
     if not unique:
-        raise RuntimeError(f"DNS returned no public IPv4 addresses for {CANDIDATE_DOMAIN}")
+        raise RuntimeError("no candidate addresses to test")
     if attempts < 1 or min_successes < 1 or min_successes > attempts:
         raise ValueError("require 1 <= min_successes <= attempts")
 
@@ -272,7 +227,7 @@ def choose_candidate(
 
     if not eligible:
         raise RuntimeError(
-            f"no {CANDIDATE_DOMAIN} address passed at least {min_successes}/{attempts} "
+            f"no candidate address passed at least {min_successes}/{attempts} "
             f"TLS/HTTP probes; refusing to publish an unverified rule"
         )
     eligible.sort()
@@ -340,24 +295,14 @@ def main() -> int:
     args = parser.parse_args()
 
     targets = read_targets(args.targets)
-    try:
-        candidates = resolve_ipv4()
-    except OSError as exc:
-        print(f"warning: could not resolve {CANDIDATE_DOMAIN}: {exc}", file=sys.stderr)
-        candidates = []
     static_ips = read_static_ips(STATIC_IPS_FILE)
     if static_ips:
         print(f"Static host pins: {', '.join(f'{k}->{v}' for k, v in static_ips.items())}", file=sys.stderr)
-    preferred_ips = read_preferred_ips(PREFERRED_IP_FILE)
-    if preferred_ips:
-        print(f"Operator-preferred candidate IPs: {', '.join(preferred_ips)}", file=sys.stderr)
     print(f"Explicit affected hosts: {', '.join(targets)}", file=sys.stderr)
-    print(f"Resolved {CANDIDATE_DOMAIN} IPv4 candidates: {', '.join(candidates)}", file=sys.stderr)
 
     selected: dict[str, str] = {}
     for target in targets:
         kind, host = split_target(target)
-        placed = False
         if host in static_ips:
             pinned = static_ips[host]
             if args.trust_static_pins:
@@ -376,23 +321,9 @@ def main() -> int:
             selected[target] = pinned
             print(f"Selected {host} -> {pinned} (static pin)", file=sys.stderr)
             continue
-        for preferred in preferred_ips:
-            probes = [probe_ipv4(preferred, hostname=host) for _ in range(ATTEMPTS)]
-            if sum(1 for probe in probes if probe.ok) >= MIN_SUCCESSES:
-                selected[target] = preferred
-                print(f"Selected {host} -> {preferred} (preferred)", file=sys.stderr)
-                placed = True
-                break
-            print(f"Preferred {preferred} did not pass for {host}", file=sys.stderr)
-        if placed:
-            continue
-        print(f"Testing jsdelivr candidate IPs with SNI/Host {host}", file=sys.stderr)
-        ip, _ = choose_candidate(
-            candidates,
-            probe_fn=lambda candidate, target=host: probe_ipv4(candidate, hostname=target),
+        raise RuntimeError(
+            f"{host} has no entry in static-ips.txt; refusing to publish an unverified rule"
         )
-        selected[target] = ip
-        print(f"Selected {host} -> {ip}", file=sys.stderr)
 
     atomic_write(args.output, render_rules(selected))
     print(f"Wrote {len(selected)} exact-host rules to {args.output}", file=sys.stderr)

@@ -63,11 +63,9 @@ https://PlumCraneCwC.github.io/x-anycast-sub/xcom-media.txt
 
 ## 地址是从哪来的
 
-每个主机按优先级取地址：
+`static-ips.txt` 是唯一来源：每个主机一行「主机名 地址」，构建时逐条采用；没有写进去的主机直接让工作流失败，不去猜地址，也不会发布未经验证的规则。
 
-1. `static-ips.txt` 里为该主机显式写的固定地址
-2. 社区维护的客户端优选域名解析出的 Cloudflare 边缘（由定期任务刷新）
-3. GitHub runner 上 `jsdelivr.com` 的 A 记录
+这些地址由另一条线定期刷新——把 Cloudflare 和 Fastly 公布的 IPv4 段整体抽样，对候选发一次真实握手，取最快的一条写回文件（做法见下面两节）。
 
 选定后仍会在 runner 上复验（不带 `--trust-static-pins` 时）：直连 TCP/443、校验证书与 SNI 是否匹配、发送同名 `Host` 的 HTTP/1.1 请求；每地址测 3 次、至少 2 次通过才算数。全部候选失败则工作流失败、保留上一版，不会发布未经验证的规则。
 
