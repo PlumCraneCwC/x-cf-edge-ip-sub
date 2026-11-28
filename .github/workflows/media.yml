@@ -1,0 +1,56 @@
+name: Refresh the Fastly media edges
+
+on:
+  schedule:
+    # Twice an hour. Fastly edges go dark without warning, so the media pin is
+    # re-checked far more often than the Cloudflare subscription.
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "media-hosts.txt"
+      - "scripts/probe_media.py"
+      - ".github/workflows/media.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: fastly-media
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Probe the media hosts and render the filter
+        run: |
+          mkdir -p site
+          python scripts/probe_media.py --output site/xcom-media.txt
+          test -s site/xcom-media.txt
+          cat site/xcom-media.txt
+
+      - name: Commit the refreshed pin and republish Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain -- site/xcom-media.txt)" ]; then
+            echo "media pins unchanged, nothing to publish"
+            exit 0
+          fi
+          git config user.name "media-bot"
+          git config user.email "media-bot@users.noreply.github.com"
+          git add site/xcom-media.txt
+          git commit -m "Refresh the Fastly media edges"
+          git push
+          gh workflow run publish.yml --ref "${GITHUB_REF_NAME}"

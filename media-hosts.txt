@@ -1,0 +1,11 @@
+# X 的媒体/静态资源域名，全部 CNAME 到 Fastly（twimg.twitter.map.fastly.net /
+# video.twitter.map.fastly.net）。它们不在 Cloudflare 上，借不到 CF 边缘，
+# 只能从 Fastly 的 anycast 前缀里挑一个当前能完成 TLS 握手的边缘 IP。
+#
+# 不收录的：abs-0/pbs-0.twimg.com（104.244.43.x，Twitter 自有 AS13414，整段被封，
+# 优选没有意义）；r/ma/g.twimg.com（同类）；twttr.com / tweetdeck.com（同类）。
+pbs.twimg.com
+abs.twimg.com
+video.twimg.com
+ton.twimg.com
+cdn.syndication.twimg.com
