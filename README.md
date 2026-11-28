@@ -75,6 +75,18 @@ AdGuard Home 的**通配 `dnsrewrite` 不作用于子域**，所以像 `api.x.co
 
 明确**不**处理的主机：`abs-0.twimg.com`、`pbs-0.twimg.com`、`r/ma/g.twimg.com`、`twttr.com`、`tweetdeck.com`。它们在 Twitter 自有的 AS13414 里，整个自治域被封，改 DNS 没有意义。
 
+## Cloudflare 入口怎么选
+
+参考 [badafans/better-cloudflare-ip](https://github.com/badafans/better-cloudflare-ip) 的思路：不盯着几个手挑的入口，而是把 Cloudflare 公布的 IPv4 段整体抽样。
+
+1. 每天拉一次 `https://www.cloudflare.com/ips-v4`；每段随机取 5 个 /24、再随机化最后一段，约 70 个候选，另补几个历史可用入口。
+2. 16 路并发，对每个候选发一次 `x.com` 的 TLS 握手加 HTTP 请求，4 秒超时，任何 2xx/3xx/4xx 都算通过。
+3. 取最快的一个写进 `static-ips.txt`。
+
+`x.com` 通就够——同一个 zone 在 Cloudflare 边缘上共用证书，实测最快的那个入口对 `api.x.com`、`t.co`、`api.twitter.com` 同样返回正常状态码，所以不必逐个主机复测。
+
+脚本在路由器上：`/root/xcom-cf-optimize.sh`，80 个候选约 20 秒跑完。
+
 ## `static-ips.txt`
 
 `static-ips.txt` 存放「主机名 + 一条能完成握手的固定地址」，每行 `主机名 地址`，给这些主机固定一个已验证的边缘地址。
